@@ -1,0 +1,784 @@
+\documentclass[11pt]{article} 
+\usepackage{fancyhdr}
+\usepackage{float}
+\usepackage{hanging}
+\addtolength{\headheight}{1.5cm} % make more space for the header
+\pagestyle{fancy}{} % use fancy for all pages except chapter start
+\rhead{\includegraphics[height=1.3cm,keepaspectratio]{logo.jpg}} % right logo
+\renewcommand{\headrulewidth}{0pt} % remove rule below header
+\usepackage[left=3.5cm,top=4cm,right=3.5cm,bottom=3.5cm]{geometry}
+\begin{document}
+
+\SweaveOpts{concordance=TRUE}
+
+\title{FINAL:  Revised IPEDS Graduation Rates,  2004 - 2017}
+
+
+\author{Jeff Webb, SLCC Institutional Research}
+\maketitle
+
+\section{Introduction}
+
+In spring 2016 IRR discovered that the registration status used to identify first-time students for inclusion in the IPEDS cohort had (among other problems) been systematically excluding former concurrent enrollment students.  That impacted IPEDS graduation rates:  former concurrent students tend to graduate more quickly and at higher rates than average, having already accrued college credits.  Furthermore, because that exclusion seemed somewhat random, with large year-to-year changes in the number of former concurrent students included in the cohort, the IPEDS graduation rates calculated historically at the college showed large variation.  Thus, in an effort to improve the accuracy of IPEDS graduation rates, IRR undertook a systematic revision of the use of the registration status field in identifying new students.  This effort was completed by Marie Taylor by summer 2016, and the new registration status was used for reporting third week numbers to USHE in Fall 2016.  
+
+Historical IPEDS cohorts have not been officially revised at this time.  However, the revised registration status field  for previous new student cohorts has been included in the USHE tables, allowing us to calculate what graduation rates \emph{would have been} for these revised IPEDS cohorts.  This report reviews IPEDS definitions and historical SLCC reports (and the problems therein), and concludes by presenting IPEDS graduation counts and percents for the revised cohorts. 
+
+\section{Talking points}
+
+\begin{itemize}
+\item The revised IPEDS graduation rates presented here are based on an updated registration status code that identifies---more accurately, we believe---a student in a given term as (among others) continuing, returning, transfer or first-time.  
+\item Revising the student registration status code in this way eliminated the alarming fluctuation in graduation rates that was due---primarily, we believe---to the proportion of former concurrent included in each IPEDS cohort.
+\item The resulting  graduation rates are comparable to the average rates observed at similar large, urban two-year colleges and exhibit strong stability from year to year. We would expect stability:  SLCC should be relatively insulated from dramatic performance fluctuations just by virtue of its size.
+\item Given the stability of the revised IPEDS graduation rates we think it is reasonable to expect that  rates for future cohorts will resemble those in the tables below:  on average, two year rates should be about 8\% , three year rates should be about 18\%, and four year rates should be about 24\%.
+\end{itemize}
+
+\section{Data}
+
+The source for the graduation calculations was the ``SLCC STUDENTS'' table in the ODS ``enroll'' schema and the ``shrdgmr'' table in the Banner saturn schema.  ``shrdgmr'' identifies students who graduated.
+
+We calculated the revised IPEDS cohorts using the following filters:
+
+\begin{itemize}
+\item Students must be full time (part time / full time = F) and first time (registration status = FF or FH). Students with registration status of TU---transferred in---are thus filtered out as required by IPEDS.
+\item Students must have degree intent > 0.
+\end{itemize}
+
+The source for historical graduation rates reported to IPEDS was the Excel file, ``Historical GRS,'' in the IPEDS folder on the I-drive, created and maintained by Debbie Summers.
+
+Note that a small number of students graduated before matriculating at SLCC.  In the spirit of the IPEDS requirement that students in the IPEDS cohort should be ``degree-seeking,'' these students were credited with graduating only if they went on to earn an additional degree \emph{after} matriculating. 
+
+When reporting graduation counts and rates we use the USHE convention of reporting the cohort year using the the year that concludes the academic year, unless the term is specifically included.  Thus,  2017 represents the 2016-17 academic year, and so on, while 201640 represents fall term 2016.
+
+\section{Who is in the IPEDS cohort?} 
+
+From IPEDS:
+
+Include all full-time, first-time degree/certificate-seeking undergraduate students entering the institution during the fall term. Include students enrolled in the fall term who attended college for the first time in the prior summer term and students who entered with advanced standing (college credits earned before graduating from high school).
+
+Include all students enrolled for credit toward a degree, diploma, certificate, or other formal award. Include students enrolled in courses that are part of a vocational or occupational program, INCLUDING those enrolled in off-campus centers and those enrolled in distance learning/home study programs.
+
+Be sure to include full-time students taking remedial courses if the student is considered degree-seeking for the purpose of student financial aid determination. This includes students who:
+
+\begin{itemize}
+\item Received any type of federal financial aid, regardless of what courses they took at any time
+\item Received any state or locally based financial aid with an eligibility requirement that the student be enrolled in a degree, certificate, or transfer-seeking program
+\item Obtained a student visa to enroll at a U.S. postsecondary institution
+\end{itemize}
+
+A student who is designated as a member of the cohort remains in the cohort, even if the student:
+\begin{itemize}
+\item Becomes a part-time student
+\item Transfers to another institution
+\item Drops out of the institution
+\item Stops out of the institution
+\item Has not fulfilled the institution's requirements to receive a degree or certificate.
+\end{itemize}
+
+Do NOT include students in the cohort who are:
+\begin{itemize}
+\item Enrolled exclusively in courses not creditable toward a formal award or the completion of a vocational program (i.e., non-degree/certificate-seeking students)
+\item Exclusively taking CEUs
+\item Exclusively auditing classes
+\item Enrolled part-time
+\item Transfers into the institution
+\item Foreign students who are only taking coursework at a host institution (e.g., an American institution overseas), if these students are not enrolled at a U.S. institution.
+\end{itemize}
+
+\section{Revised registration status code}
+
+The SQL script for identifying students in IPEDS cohorts had previously used a Banner field, admit type, to classify students as first time.  However, the above-mentioned fluctuation in IPEDS graduation rates led to a reconsideration of this approach, and some worry that admit type had perhaps been inconsistently applied over the years, particularly with respect to the classification of former concurrent students.  The updated approach relies instead on on a combination of minimum term, high school graduation date and age at enrollment.  (The identification of both \emph{transfer} and \emph{non-matriculated} students still uses the admit type  field in the sgbstdn Banner table.)  The updated approach, in eschewing  admit type, should be more robust to potentially changing data entry practices at SLCC that might inadvertently impact IPEDS graduation rates. 
+
+
+<<echo=F, results=hide>>=
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(tidyr)
+
+#Functions
+
+setwd("~/Documents/OneDriveBusiness/grad_rates")
+
+find_1yr_grad2 <- function(cohort, grad_term, max_term=201630){
+  diff <- ifelse(max_term-cohort < 100, NA, 
+                 ifelse(!is.na(grad_term[1]) & 
+                          grad_term[1]-cohort[1] < 100, 1, 0)) 
+  as.numeric(diff)
+}
+
+find_2yr_grad2 <- function(cohort, grad_term, max_term=201630){
+  diff <- ifelse(max_term-cohort < 200, NA, 
+                 ifelse(!is.na(grad_term[1]) & 
+                          grad_term[1]-cohort[1] < 200, 1, 0)) 
+  as.numeric(diff)
+}
+
+find_3yr_grad2 <- function(cohort, grad_term, max_term=201630){
+  diff <- ifelse(max_term-cohort < 300, NA, 
+                 ifelse(!is.na(grad_term[1]) & 
+                          grad_term[1]-cohort[1] < 300, 1, 0)) 
+  as.numeric(diff)
+}
+
+find_4yr_grad2 <- function(cohort, grad_term, max_term=201630){
+  diff <- ifelse(max_term-cohort < 400, NA, 
+                 ifelse(!is.na(grad_term[1]) & 
+                          grad_term[1]-cohort[1] < 400, 1, 0)) 
+  as.numeric(diff)
+}
+
+
+find_5yr_grad2 <- function(cohort, grad_term, max_term=201630){
+  diff <- ifelse(max_term-cohort < 500, NA, 
+                 ifelse(!is.na(grad_term[1]) & 
+                          grad_term[1]-cohort[1] < 500, 1, 0)) 
+  as.numeric(diff)
+}
+
+find_6yr_grad2 <- function(cohort, grad_term, max_term=201630){
+  diff <- ifelse(max_term-cohort < 600, NA, 
+                 ifelse(!is.na(grad_term[1]) & 
+                          grad_term[1]-cohort[1] < 600, 1, 0)) 
+  as.numeric(diff)           
+}
+
+#find_6yr_grad2(200940, 201530, max_term=201630)
+
+find_grad_date2 <- function(aa,aas,ape,as,cc,cp,cer, di){#the args to this function are aa_term, etc
+  temp <- as.numeric(data.frame(aa,aas,ape,as,cc,cp, cer, di)[1,])
+  as.numeric(ifelse(all(is.na(temp)), NA, min(temp, na.rm=T)))
+} 
+
+#find_grad_date2(NA,NA,NA,NA,NA,NA,NA,200940)
+
+#find au
+
+find_au <- function(grade){
+  temp <- rep(0,length(grade))
+  temp[which(grade=="AU")] <-1
+  temp
+}
+
+#Build grad table for USHE data
+
+build_grad_table_USHE <- function(data, use="fall",type="count", last_term=201640){
+  d <- data.frame(data)
+  #d <- data.frame(students)
+  d$last_term <- last_term
+  
+ 
+  d$semester <- as.numeric(substr(d$cohort, 5,6))
+  if(use=="fall") d <- d[which(d$semester==40),]
+  
+  calc_grad <- function(cohort, grad_term, max_term, window=3){
+    cohort <- ifelse(is.factor(cohort), as.numeric(levels(cohort))[cohort], cohort)
+    grad_term <-  ifelse(is.factor(grad_term), as.numeric(levels(grad_term))[grad_term], grad_term)
+    diff <- ifelse(max_term-cohort < window*100, NA,
+                   ifelse(!is.na(grad_term[1]) & grad_term[1]-cohort[1] < window*100, 1, 0))
+    return(as.numeric(diff))
+  }
+  
+  d <- d %>%
+    group_by(pidm) %>%
+    mutate(grad_1yr =calc_grad(cohort, grad_term, last_term, window=1),
+           grad_2yr =calc_grad(cohort, grad_term, last_term, window=2),
+           grad_3yr =calc_grad(cohort, grad_term, last_term, window=3),
+           grad_4yr =calc_grad(cohort, grad_term, last_term, window=4),
+           grad_5yr =calc_grad(cohort, grad_term, last_term, window=5),
+           grad_6yr =calc_grad(cohort, grad_term, last_term, window=6))
+  
+  if(type=="count"){
+    t <- d %>%
+      group_by(pidm) %>% gather(key=grad_yr, value=grad_flag, grad_1yr, grad_2yr,grad_3yr,grad_4yr,
+                              grad_5yr,grad_6yr) %>%
+      group_by(cohort, grad_yr,grad_flag) %>% tally
+    
+    t <- t[which(t$grad_flag==1), ]   
+    
+    
+    t <- t[,-3]
+    
+    g <- spread(t, grad_yr, n)
+    
+  }
+  
+  if(type=="perc"){
+    t <- d %>%
+      group_by(pidm) %>% gather(key=grad_yr, value=grad_flag, grad_1yr, grad_2yr,grad_3yr,grad_4yr,
+                              grad_5yr,grad_6yr) %>%
+      group_by(cohort, grad_yr,grad_flag) %>% tally
+    
+    total <- d %>% group_by(cohort) %>% tally
+    names(total)[2] <- "total"
+    t <-left_join(t, total, by="cohort")
+    
+    t <- t %>% mutate(perc=round((n/total)*100,1))
+    
+    t <- t[which(t$grad_flag==1), ]
+    t <- t[,-c(3:5)]
+    
+    
+    g <- spread(t, grad_yr, perc)
+    
+  }
+  
+  as.data.frame(g)
+  
+}
+@
+
+
+<<echo=FALSE, results=hide>>=
+
+#This is code to construct grad rates from the VFA for comparison.
+
+# #SQL code:
+# SELECT COHORT,
+#        ID,
+#        PERSON_UID,
+#        LAST_NAME,
+#        TERM_CODE,
+#        SSBSECT_CRN,
+#        SSBSECT_SUBJ_CODE,
+#        SSBSECT_CRSE_NUMB,
+#        SFRSTCR_RSTS_CODE,
+# 	   sfrstcr_grde_code,
+#        APE_TERM,
+#        AS_TERM,
+#        AAS_TERM,
+#        AA_TERM,
+#        CC_TERM,
+#        CP_TERM,
+#        DI_TERM,
+#        FORMER_CE,
+#        TRANSFER_IN,
+#        FIRST_STATUS,
+# 	   degree_intent,
+#        CER_TERM,
+#        TRANSFER_CODE,
+#        SSBSECT_CAMP_CODE,
+#        TRANSFER_CODE2
+#   FROM enroll.churn
+ 
+
+
+# setwd("~/Documents/OneDriveBusiness/grad_rates")
+# 
+# dd <- read_csv("ipeds.csv") #1939136
+# names(dd) <- tolower(names(dd))
+# 
+# names(dd)
+# check(dd)
+# 
+# #investigate reg codes
+# 
+# #THis is the approved enrollment list
+# #You could use this: (REGISTRATION_STATUS in ('RE','FA','RN','WA','WW','WV','RV','AA','RW','AU','WS','WC')
+# reg <- c('RE','FA','RN','WA','WW','WV','RV','AA','RW','AU','WS','WC')
+# unique(dd$sfrstcr_rsts_code)
+# 
+# #filter for approved enrollment code
+# dd <- subset(dd, sfrstcr_rsts_code %in% reg) #1693543
+# 
+# #Cehck to see that there are no CEs in the subject code
+# any(unique(dd$ssbsect_subj_code) == "CE")
+# 
+# 
+# #select fall cohorts
+# unique(dd$cohort)
+# dd <- subset(dd, cohort==200440 |cohort==200540 |
+#                cohort==200640 |cohort==200740 |
+#                cohort==200840 | cohort==200940|
+#                cohort==201040 | cohort==201140|
+#                cohort==201240 | cohort==201340 |
+#                cohort==201440 |cohort==201540) #1152390
+# 
+# #create class variable
+# names(dd)
+# dd$class <- paste0(dd$ssbsect_subj_code, dd$ssbsect_crse_numb)
+# 
+# check(dd)
+# 
+# #What does former concurrent look like?
+# dd %>% group_by(id) %>% slice(1) %>% group_by(cohort) %>%
+#   summarize(former_ce = round(mean(ifelse(former_ce=="Y",1,0)),2))
+# 
+# #Select variables and filter for IPEDS:  FT, no transfer_in, no all audit, deg_intent>0.
+# #The strategy here is to create multiple datasets for each subset.
+# d1 <- dd %>%
+#   dplyr::select(cohort=cohort, id, name=last_name,
+#                 former_ce, transfer_in, first_status, degree_intent,
+#                 term= term_code, class, course=ssbsect_crse_numb,
+#                 grade= sfrstcr_grde_code,
+#                 subject=ssbsect_subj_code,as_term,aas_term, ape_term, aa_term,
+#                 cc_term,  cp_term ,di_term, cer_term) #1152390
+# 
+# #filter
+# d2 <- d1 %>%
+#   filter(degree_intent!=0, first_status=="FT", transfer_in=="" ) #462901
+# 
+# unique(d2$degree_intent)
+# unique(d2$first_status)
+# unique(d2$transfer_in)
+# 
+# #filter for AU
+# d3 <- d2 %>%
+#   mutate(au=find_au(grade)) %>%
+#   group_by(id, term) %>%
+#   arrange(id, term)%>%
+#   mutate(perc_au=round(mean(au),2), perc_au=first(perc_au)) 
+# 
+# unique(subset(d3, perc_au==1)$id)
+# 
+# d3 <- d3 %>% filter(perc_au < 1) #462901
+# 
+# #calculate minimum grad date and flags for each grad threshold
+# d4 <- d3 %>%
+#   group_by(id) %>%
+#   mutate(di_term = as.numeric(ifelse(di_term=="", NA, di_term)),
+#     grad_term=find_grad_date2(aa_term, aas_term, ape_term,
+#                                    as_term, cc_term,  cp_term,
+#                                    cer_term, di_term))
+# 
+# #Early graduates?--i.e., cohort < grad date
+# early_grad <- d4 %>% group_by(id) %>% slice(1) %>% mutate(early= ifelse(cohort>grad_term,1,0)) %>% group_by(cohort) %>% summarize(early_grad=mean(early, na.rm=T))
+# 
+# ggplot(early_grad, aes(cohort, early_grad, group=1)) + geom_line() +
+#   ggtitle("graduation before matriculation, IPEDS")#hmmm.
+# 
+# #How many graduate at all?
+# d4 %>% group_by(id) %>% slice(1) %>% mutate(grad=ifelse(is.na(grad_term),0,1)) %>% group_by(cohort) %>% summarize(grad_perc=mean(grad, na.rm=T))
+# 
+# #Calculate year specific grad flags
+# d5 <- d4 %>%
+#   mutate(grad_1yr=find_1yr_grad2(cohort, grad_term),
+#          grad_2yr=find_2yr_grad2(cohort, grad_term),
+#          grad_3yr=find_3yr_grad2(cohort, grad_term),
+#          grad_4yr=find_4yr_grad2(cohort, grad_term),
+#          grad_5yr=find_5yr_grad2(cohort, grad_term),
+#          grad_6yr=find_6yr_grad2(cohort, grad_term))
+# 
+# #check
+# d5 %>% dplyr::select(name, id, grad_term,as_term, aas_term,
+#                       ape_term, aa_term, cc_term,
+#                       cp_term, cer_term, di_term ) %>%
+#   group_by(id) %>%
+#   slice(1) %>%
+#   print(n=80)
+# 
+# d5 %>% dplyr::select(cohort,name, id, grad_term,grad_1yr,
+#                       grad_2yr,grad_3yr,grad_4yr,grad_5yr,grad_6yr) %>%
+#   group_by(id) %>%
+#   slice(1) %>%
+#   print(n=80)
+# 
+# #there should be trailing NAs for the cohorts that won't have grad rates
+# unique(subset(d5, cohort==201540)$grad_6yr)
+# unique(subset(d5, cohort==201540)$grad_4yr)
+# unique(subset(d5, cohort==201540)$grad_5yr)
+# 
+# #Number in each cohort
+# d5 %>% group_by(id) %>% slice(1) %>% group_by(cohort) %>% tally
+# #1540 is 1897; for reference the number on the idrive is: 1416
+# 
+# #create count table from d5, 1 row per student
+# grad_table <- d5 %>%
+#   group_by(id) %>%
+#   slice(1) %>%
+#   gather(key=grad_yr, value=grad_flag, grad_1yr,
+#          grad_2yr,grad_3yr,grad_4yr, grad_5yr,grad_6yr) %>%
+#   group_by(cohort, grad_yr,grad_flag) %>%
+#   tally %>%
+#   group_by(cohort, grad_yr) %>%
+#   mutate(total = sum(n),
+#          perc= round((n/total)*100,2)) %>%
+#   filter(grad_flag!=0)
+# 
+# data.frame(grad_table)
+# 
+# gn <- spread(grad_table[,-c(3, 5,6)], grad_yr, n)
+# gn <- grad_table %>% group_by(cohort) %>% slice(1) %>% dplyr::select(cohort,total) %>% left_join(gn, by="cohort")
+# 
+# library(xtable)
+# xtable(gn, caption="IPEDS graduation counts by cohort and threshold")
+# 
+# gp <- spread(grad_table[,-c(3, 4,5)], grad_yr, perc)
+# gp <- grad_table %>% group_by(cohort) %>% slice(1) %>% dplyr::select(cohort,total) %>% left_join(gp, by="cohort")
+# xtable(gp, caption="IPEDS graduation rates by cohort and threshold")
+# 
+# 
+# #For reference, build tables for VFA
+# d1 <- dd %>%
+#   dplyr::select(cohort=cohort, id, name=last_name,
+#                 former_ce, transfer_in, first_status, degree_intent,
+#                 term= term_code, class, course=ssbsect_crse_numb,
+#                 grade= sfrstcr_grde_code,
+#                 subject=ssbsect_subj_code,as_term,aas_term, ape_term, aa_term,
+#                 cc_term,  cp_term ,di_term, cer_term) #1152390
+# 
+# 
+# #calculate minimum grad date and flags for each grad threshold
+# d4_vfa <- d1 %>%
+#   group_by(id) %>%
+#   mutate(di_term = as.numeric(ifelse(di_term=="", NA, di_term)),
+#     grad_term=find_grad_date2(aa_term, aas_term, ape_term,
+#                                    as_term, cc_term,  cp_term,
+#                                    cer_term, di_term))
+# 
+# #Early graduates?--i.e., cohort < grad date
+# early_grad_vfa <- d4_vfa %>% group_by(id) %>% slice(1) %>% mutate(early= ifelse(cohort>grad_term,1,0)) %>% group_by(cohort) %>% summarize(early_grad=mean(early, na.rm=T))
+# 
+# ggplot(early_grad_vfa, aes(cohort, early_grad, group=1)) + geom_line() +
+#   ggtitle("graduation before matriculation, VFA")#hmmm.
+# 
+# #How many graduate at all?
+# d4_vfa %>% group_by(id) %>% slice(1) %>% mutate(grad=ifelse(is.na(grad_term),0,1)) %>% group_by(cohort) %>% summarize(grad_perc=mean(grad, na.rm=T))
+# 
+# #Calculate year specific grad flags
+# d5_vfa <- d4_vfa %>%
+#   mutate(grad_1yr=find_1yr_grad2(cohort, grad_term),
+#          grad_2yr=find_2yr_grad2(cohort, grad_term),
+#          grad_3yr=find_3yr_grad2(cohort, grad_term),
+#          grad_4yr=find_4yr_grad2(cohort, grad_term),
+#          grad_5yr=find_5yr_grad2(cohort, grad_term),
+#          grad_6yr=find_6yr_grad2(cohort, grad_term))
+# 
+# #create count table from d5_vfa, 1 row per student
+# grad_table_vfa <- d5_vfa %>%
+#   group_by(id) %>%
+#   slice(1) %>%
+#   gather(key=grad_yr, value=grad_flag, grad_1yr,
+#          grad_2yr,grad_3yr,grad_4yr, grad_5yr,grad_6yr) %>%
+#   group_by(cohort, grad_yr,grad_flag) %>%
+#   tally %>%
+#   group_by(cohort, grad_yr) %>%
+#   mutate(total = sum(n),
+#          perc= round((n/total)*100,2)) %>%
+#   filter(grad_flag!=0)
+# 
+# data.frame(grad_table_vfa)
+# 
+# gn_vfa <- spread(grad_table_vfa[,-c(3, 5,6)], grad_yr, n)
+# gn_vfa <- grad_table_vfa %>% group_by(cohort) %>% slice(1) %>% dplyr::select(cohort,total) %>% left_join(gn_vfa, by="cohort")
+# gn_vfa
+# 
+# gp_vfa <- spread(grad_table_vfa[,-c(3, 4,5)], grad_yr, perc)
+# gp_vfa <- grad_table_vfa %>% group_by(cohort) %>% slice(1) %>% dplyr::select(cohort,total) %>% left_join(gp_vfa, by="cohort")
+# gp_vfa
+
+
+#This fits exactly with the earlier analysis
+@
+
+<<echo=FALSE, results=hide>>=
+#ipeds_updated.csv
+
+# select 
+# s_year, 
+# pidm, 
+# s_banner_id, 
+# s_gender, 
+# s_birth_dt, 
+# s_age, 
+# s_ethnicity, 
+# s_county_origin, 
+# s_curr_zip, 
+# s_curr_cip
+# from enroll.slcc_students
+# where s_pt_ft = 'F'
+# and s_reg_status in ('FF','FH')
+# and s_deg_intent <> '0'
+# and s_term = '2'
+# and s_year <> '2003'
+# and s_extract = '3'
+# and s_inst = '005220'
+
+#temp_award.csv
+# select 
+# distinct shrdgmr_pidm,
+# shrdgmr_acyr_code
+# from shrdgmr
+# where  ((shrdgmr_degs_code in ('AW','SA')
+# and shrdgmr_grst_code = '5')
+# or shrdgmr_degs_code = 'SA')
+
+
+library(slcc)
+setwd("~/Documents/OneDriveBusiness/IPEDS")
+
+i <- read.csv("ipeds_updated.csv")
+t <- read_csv("temp_award.csv")
+
+names(i)
+head(i)
+
+names(t)
+head(t)
+
+dd <- left_join(i, t, by = c("PIDM"="SHRDGMR_PIDM"))
+head(dd)
+names(dd) <- tolower(names(dd))
+
+d <- dd %>% 
+  mutate(grad = shrdgmr_acyr_code - s_year + 1) %>%
+  group_by(pidm) %>%
+  mutate(min_grad = ifelse(length(pidm)> 1 & any(grad >0), min(grad[which(grad > 0)]), grad)) %>%
+  slice(1)
+
+check(d)
+    
+#cohort
+cohorts <- d %>% group_by(s_year) %>% tally
+names(cohorts) <- c("Cohort year", "Cohort size")
+
+check(d[, c("s_year","pidm","shrdgmr_acyr_code","grad","min_grad")])
+
+library(tidyr)
+count <- d %>% group_by(s_year, min_grad) %>% 
+  tally %>% 
+  filter(min_grad > 0, min_grad < 7) %>%
+  group_by(s_year) %>%
+  mutate(grad= cumsum(n)) %>%
+  data.frame() 
+
+count <- count[,-3]
+
+ count <- count %>% spread(min_grad, grad)
+
+names(count) <- c("Cohort year", "1 yr","2 yr","3 yr","4 yr","5 yr","6 yr")
+  
+count <- left_join(cohorts, count , by="Cohort year" )
+
+
+library(xtable)
+xtable(count,
+  caption="IPEDS graduation counts by cohort year and threshold", digits=0)
+
+percent <- count %>%
+  group_by(`Cohort year`) %>% 
+  mutate(`1 yr` = round((`1 yr`/`Cohort size`)*100,2),
+         `2 yr` = round((`2 yr`/`Cohort size`)*100,2),
+         `3 yr` = round((`3 yr`/`Cohort size`)*100,2),
+         `4 yr` = round((`4 yr`/`Cohort size`)*100,2),
+         `5 yr` = round((`5 yr`/`Cohort size`)*100,2),
+         `6 yr` = round((`6 yr`/`Cohort size`)*100,2))
+         
+xtable(percent,
+  caption="IPEDS graduation rates by cohort year and threshold")
+
+
+hist_tab <- data.frame(cohort=c(seq(2005,2012,1)), n= c(1911, 1909, 1924, 1842, 2373, 2161, 1538, 1335), 
+                                exclusions=c(80, 50, 168, 166, 6, 137,  134, 119),
+                                completions =c(250+124, 439, 479, 405, 501, 470, 223, 136))
+
+hist_tab$`rate (w/ excl.)` <- round(hist_tab[,4]/(hist_tab[,2]-hist_tab[,3])*100,2)
+hist_tab$`rate (w/out excl.)` <- round(hist_tab[,4]/(hist_tab[,2])*100,2)
+
+xtable(hist_tab, caption="SLCC historical IPEDS graduation counts and rates")
+
+time_100_mean <- round(mean(unlist(percent[1:12,4])),2)
+time_100_sd <- round(sd(unlist(percent[1:12,4])),2)
+
+time_150_mean <- round(mean(unlist(percent[1:11,5])),2)
+time_150_sd <- round(sd(unlist(percent[1:11,5])),2)
+
+time_200_mean <- round(mean(unlist(percent[1:10,6])),2)
+time_200_sd <- round(sd(unlist(percent[1:10,6])),2)
+
+head(hist_tab)
+
+avg_exclusions <- mean(hist_tab$exclusions/hist_tab$n)
+@
+
+
+\section{Historical IPEDS submissions}
+
+\floatplacement{table}{H}
+\begin{table}
+\centering
+\begin{tabular}{rrrrrrr}
+  \hline
+ & cohort & n & exclusions & completions & rate (with excl.) & rate (w/out excl.) \\ 
+  \hline
+1 & 200540 & 1911 & 80 & 374 & 20.43 & 19.57 \\ 
+  2 & 200640 & 1909 & 50 & 439 & 23.61 & 23.00 \\ 
+  3 & 200740 & 1924 & 168 & 479 & 27.28 & 24.90 \\ 
+  4 & 200840 & 1842 & 166 & 405 & 24.16 & 21.99 \\ 
+  5 & 200940 & 2373 & 6 & 501 & 21.17 & 21.11 \\ 
+  6 & 201040 & 2161 & 137 & 470 & 23.22 & 21.75 \\ 
+  7 & 201140 & 1538 & 134 & 223 & 15.88 & 14.50 \\ 
+  8 & 201240 & 1335 & 119 & 136 & 11.18 & 10.19 \\ 
+   \hline
+\end{tabular}
+\caption{SLCC historical IPEDS 150\% (or three year) graduation counts and rates} 
+\end{table}
+
+The average three year rate (with exclusions) for 2005-2012 was \Sexpr{round(mean(hist_tab[,5]),2)}\%.
+
+These historical graduation rates are concerning:  
+\begin{enumerate}
+\item There was large year-to-year fluctuation, with a high of 27\% for the 200740 cohort and a recent low of 11\% for the most recent 201240 cohort. 
+\item There was an apparent crash in rates occurred for the 201140 and 201240 cohorts. Is something going wrong at the college?
+\end{enumerate}
+
+One source of rate variability, clearly, was  the number of exclusions.  These were primarily missionary exclusions, provided to SLCC by the LDS Church,  that are widely recognized to bear little resemblance to the actual number of missionaries.  We recommend that, for this reason, SLCC either a) not use any exclusions for IPEDS reporting or b) use the average of historical exclusions, which was 6\% for 2005-10. 
+
+Even without exclusions, however, there was large year-to-year variability in graduation rates.  Investigations into this variability revealed large, correlated variability in the number of former concurrent students included in the IPEDS cohorts as a result of the formula used for calculating the registration status code.  It appears that former concurrent students were being somewhat randomly included or excluded from the IPEDS cohorts, producing misleading graduation rates. (We don't know precisely why this was the case.)  Former concurrent students graduate at higher rates---thus influencing cohort performance--- because they've already completed some college credits concurrently.  Although we have not researched the degree to which the inconsistent inclusion of former concurrent students from IPEDS cohorts may have affected graduation rates, we did look into that issue for VFA cohorts. The proportion of former concurrent students in each VFA cohort, which uses a similar definition of new student, had fluctuated between 15 and 30\% from year to year, prior to the revision, but is now stable at about 24-27\%.
+
+
+
+
+
+\section{Updated IPEDS graduation counts and rates}
+
+The new registration status field yields larger IPEDS cohorts  that  exhibit comparatively less variability in graduation rates from year-to-year.  The historically high rates (27\%), as well as the low rates (11\%), may have had more to do with the cohort selection method than with the  the reality of student performance.
+
+Note that, as of this writing, in spring 2017, we can report only partial counts and rates for the cohorts:
+\begin{itemize}
+\item 2017: none.  Students who started in summer or fall 2016 would be eligible to  have graduated in one year at the end of spring term, 2017.
+\item 2016: 1 year.  Students who started in summer or fall 2015 were eligible to have graduated in one year as of spring 2016.
+\item 2015: 2 year.
+\item 2014: 3 year.
+\item 2013: 4 year.
+\item 2012: 5 year.
+\item 2004 - 2011: 6 year.
+\end{itemize}
+
+Note that in the tables below the cohort years are denominated according the finishing year in each academic year.  Thus, students in the 2004 cohort year began at SLCC in Fall term 2003, students in the 2005 cohort year began at SLCC in Fall term 2004, and so on.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{rrrrrrrrr}
+  \hline
+ & Cohort year & Cohort size & 1 yr & 2 yr & 3 yr & 4 yr & 5 yr & 6 yr \\ 
+  \hline
+1 & 2004 & 2236 & 40 & 224 & 375 & 474 & 559 & 612 \\ 
+  2 & 2005 & 2444 & 55 & 262 & 449 & 597 & 705 & 778 \\ 
+  3 & 2006 & 2317 & 44 & 203 & 393 & 534 & 632 & 693 \\ 
+  4 & 2007 & 2159 & 28 & 195 & 390 & 529 & 632 & 697 \\ 
+  5 & 2008 & 2073 & 40 & 205 & 397 & 524 & 606 & 652 \\ 
+  6 & 2009 & 2163 & 46 & 203 & 415 & 547 & 644 & 704 \\ 
+  7 & 2010 & 2786 & 58 & 232 & 489 & 649 & 767 & 829 \\ 
+  8 & 2011 & 2597 & 43 & 236 & 466 & 623 & 701 & 774 \\ 
+  9 & 2012 & 2568 & 41 & 229 & 446 & 603 & 711 &  \\ 
+  10 & 2013 & 2223 & 43 & 201 & 368 & 512 &  &  \\ 
+  11 & 2014 & 1974 & 27 & 164 & 365 &  &  &  \\ 
+  12 & 2015 & 1906 & 27 & 141 &  &  &  &  \\ 
+  13 & 2016 & 1963 & 27 &  &  &  &  &  \\ 
+  14 & 2017 & 2086 &  &  &  &  &  &  \\ 
+   \hline
+\end{tabular}
+\caption{IPEDS graduation counts by cohort year and threshold} 
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{rrrrrrrrr}
+  \hline
+ & Cohort year & Cohort size & 1 yr & 2 yr & 3 yr & 4 yr & 5 yr & 6 yr \\ 
+  \hline
+1 & 2004 & 2236 & 1.79 & 10.02 & 16.77 & 21.20 & 25.00 & 27.37 \\ 
+  2 & 2005 & 2444 & 2.25 & 10.72 & 18.37 & 24.43 & 28.85 & 31.83 \\ 
+  3 & 2006 & 2317 & 1.90 & 8.76 & 16.96 & 23.05 & 27.28 & 29.91 \\ 
+  4 & 2007 & 2159 & 1.30 & 9.03 & 18.06 & 24.50 & 29.27 & 32.28 \\ 
+  5 & 2008 & 2073 & 1.93 & 9.89 & 19.15 & 25.28 & 29.23 & 31.45 \\ 
+  6 & 2009 & 2163 & 2.13 & 9.39 & 19.19 & 25.29 & 29.77 & 32.55 \\ 
+  7 & 2010 & 2786 & 2.08 & 8.33 & 17.55 & 23.30 & 27.53 & 29.76 \\ 
+  8 & 2011 & 2597 & 1.66 & 9.09 & 17.94 & 23.99 & 26.99 & 29.80 \\ 
+  9 & 2012 & 2568 & 1.60 & 8.92 & 17.37 & 23.48 & 27.69 & \\ 
+  10 & 2013 & 2223 & 1.93 & 9.04 & 16.55 & 23.03 &  &  \\ 
+  11 & 2014 & 1974 & 1.37 & 8.31 & 18.49 &  &  &  \\ 
+  12 & 2015 & 1906 & 1.42 & 7.40 &  &  &  &  \\ 
+  13 & 2016 & 1963 & 1.38 &  &  &  &  &  \\ 
+  14 & 2017 & 2086 &  &  &  &  &  &  \\ 
+   \hline
+\end{tabular}
+\caption{IPEDS graduation rates by cohort year and threshold} 
+\end{table}
+
+
+
+
+
+
+In sum:
+\begin{itemize}
+\item Average graduation rate for 100\% time: \Sexpr{time_100_mean}\%, with standard deviation of \Sexpr{time_100_sd}.
+\item Average graduation rate for 150\% time: \Sexpr{time_150_mean}\%, with standard deviation of \Sexpr{time_150_sd}.
+\item Average graduation rate for 200\% time: \Sexpr{time_200_mean}\%, with standard deviation of \Sexpr{time_200_sd}.
+\end{itemize}
+
+\section{Comparison with similar schools}
+
+We downloaded 100, 150 and 200\% graduation rates for 52 US community colleges for years 2008-14 from IPEDS.  These were colleges from the ``large'' category---20,000 students or more.
+
+Averaging across years and institutions, the graduation rates resembled those at SLCC:
+
+
+
+<<echo=FALSE, results=hide>>=
+library(slcc)
+library(xtable)
+
+c1 <- read_csv("CSV_1272016-252.csv")
+c2 <- read_csv("CSV_1272016-296.csv")
+c3 <- read_csv("CSV_1272016-332.csv")
+c4 <- read_csv("CSV_1272016-386.csv")
+c5 <- read_csv("CSV_1272016-553.csv")
+c6 <- read_csv("CSV_1272016-581.csv")
+c7 <- read_csv("CSV_1272016-632.csv")
+head(c1)
+names(c)
+
+data.frame(c1[,2])
+
+data <- list(c1,c2,c3,c4,c5,c6,c7)
+mean_100 <- NULL
+mean_150 <- NULL
+mean_200 <- NULL
+
+slcc_100 <- NULL
+slcc_150 <- NULL
+slcc_200 <- NULL
+
+for(i in 1:7){
+ mean_100[i] <- mean(data[[i]][[4]][-46])
+mean_150[i] <- mean(data[[i]][[5]][-46])
+mean_200[i] <- mean(data[[i]][[6]][-46])
+
+slcc_100[i] <- data[[i]][[4]][46]
+slcc_150[i] <- data[[i]][[5]][46]
+slcc_200[i] <- data[[i]][[6]][46]
+}
+
+mean(mean_100, na.rm=T)
+mean(mean_150, na.rm=T)
+mean(mean_200, na.rm=T)
+#xtable(c1[,2])
+
+@
+
+\begin{itemize}
+\item Graduation rate for 100\% time: \Sexpr{round(mean(mean_100, na.rm=T),2)}\%.
+\item Graduation rate for 150\% time: \Sexpr{round(mean(mean_150, na.rm=T),2)}\%.
+\item Graduation rate for 200\% time: \Sexpr{round(mean(mean_200, na.rm=T),2)}\%.
+\end{itemize}
+
+The comparison colleges included institutions such as (to list the first 20): Mesa Community College, Pima Community College, Rio Salado College, American River College, Bakersfield College, Cerritos College, Chaffey College, City College of San Francisco, De Anza College, East Los Angeles College, El Camino Community College District, Fresno City College, Fullerton College, Long Beach City College, Los Angeles Pierce College, Mt San Antonio College, Orange Coast College, Palomar College, Pasadena City College, Santa Ana College, ... .
+
+
+% Furthermore, in 2010 the US Dept of Education published an ``Issue Brief,'' ``Tracking Students to 200\% of Normal Time:  Effect on Institutional Graduation Rates'' (http://nces.ed.gov/pubs2011/2011221.pdf) in which similar numbers were published. The following plot shows graduation rates for public two year colleges in the US.
+
+% \floatplacement{table}{H}
+% \begin{figure}
+%   \caption{Average graduation rates at 100 percent, 150 percent, and 200 percent of normal time and percentage point difference between rates (in parentheses) for 2008 for public two year colleges in the US}
+%   \centering
+%   \includegraphics{Grad_rate_ipeds.jpg}
+% \end{figure}
+% 
+% 
+
+
+
+
+\end{document}
